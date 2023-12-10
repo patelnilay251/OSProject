@@ -223,6 +223,105 @@ public:
     }
 };
 
+void startServer()
+{
+    cout << "Server: Starting server..." << endl;
+
+    int server_fd, new_socket;
+    struct sockaddr_in address;
+    int opt = 1;
+    int addrlen = sizeof(address);
+    char buffer[1024] = {0};
+
+    // Creating socket file descriptor
+    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
+    {
+        perror("Server: Socket failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Forcefully attaching socket to the port 8080
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+    {
+        perror("Server: setsockopt");
+        exit(EXIT_FAILURE);
+    }
+
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = INADDR_ANY;
+    address.sin_port = htons(8080);
+
+    // Bind the socket to the address
+    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    {
+        perror("Server: Bind failed");
+        exit(EXIT_FAILURE);
+    }
+
+    if (listen(server_fd, 3) < 0)
+    {
+        perror("Server: Listen");
+        exit(EXIT_FAILURE);
+    }
+
+    cout << "Server: Waiting for connections..." << endl;
+    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0)
+    {
+        perror("Server: Accept");
+        exit(EXIT_FAILURE);
+    }
+
+    cout << "Server: Connection established." << endl;
+    read(new_socket, buffer, 1024);
+    cout << "Server: Message received - " << buffer << endl;
+    send(new_socket, buffer, strlen(buffer), 0);
+    cout << "Server: Echo message sent" << endl;
+
+    close(new_socket);
+    close(server_fd);
+    cout << "Server: Connection closed." << endl;
+}
+
+void startClient()
+{
+    cout << "Client: Starting client..." << endl;
+
+    int sock = 0;
+    struct sockaddr_in serv_addr;
+    char buffer[1024] = {0};
+    const char *message = "Hello from client";
+
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    {
+        cout << "Client: Socket creation error" << endl;
+        return;
+    }
+
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(8080);
+
+    // Convert IPv4 and IPv6 addresses from text to binary form
+    if (inet_pton(AF_INET, "127.0.0.1", &serv_addr.sin_addr) <= 0)
+    {
+        cout << "Client: Invalid address/ Address not supported" << endl;
+        return;
+    }
+
+    if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
+    {
+        cout << "Client: Connection Failed" << std::endl;
+        return;
+    }
+
+    send(sock, message, strlen(message), 0);
+    cout << "Client: Hello message sent" << endl;
+    read(sock, buffer, 1024);
+    cout << "Client: Message received - " << buffer << endl;
+
+    close(sock);
+    cout << "Client: Connection closed." << endl;
+}
+
 int main()
 {
     cout << "Starting program..." << endl;
@@ -305,12 +404,22 @@ int main()
     scheduler.stop();
     schedulerThread.join();
 
-    // Network communication demonstration
-    // cout << "\nNetwork communication demonstration..." << endl;
-    // std::thread serverThread(startServer);
-    // serverThread.detach(); // Detach the server thread to run independently
-    // std::thread clientThread(startClient);
-    // clientThread.join(); // Join the client thread to wait for its completion
+    cout << "\n--- Network Communication ---" << endl;
+
+    // Start the server in a separate thread and detach it
+    cout << "Main: Starting server thread..." << endl;
+    std::thread serverThread(startServer);
+    serverThread.detach(); // Detach the server thread to run independently
+    cout << "Main: Server thread detached and running." << endl;
+
+    // Give the server some time to start up
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+    // Start the client in a separate thread and wait for it to complete
+    cout << "Main: Starting client thread..." << endl;
+    std::thread clientThread(startClient);
+    clientThread.join(); // Join the client thread to wait for its completion
+    cout << "Main: Client thread finished." << endl;
 
     cout << "\nSimulation complete." << endl;
 
